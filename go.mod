@@ -23,3 +23,9 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
+
+// TODO(runed IDLE): dev-only — point at the local runed checkout
+// (feat/embedder-idle-status, which adds HealthResponse STATUS_IDLE) until runed
+// is released. Before merging, remove this replace and bump the runed require
+// above to the released version.
+replace github.com/CryptoLabInc/runed => ../runed
