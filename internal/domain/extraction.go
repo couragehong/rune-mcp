@@ -61,6 +61,37 @@ func (r *ExtractionResult) IsBundle() bool {
 	return r.GroupType == "bundle" && len(r.Phases) > 1
 }
 
+// HasContent reports whether the extraction carries any substance that
+// BuildPhases/RenderPayloadText would actually render into a record. It is the
+// single source of truth for D14 (no contentless records): the capture pipeline
+// enforces it in Handle, so single capture and batch agree and no separate,
+// drift-prone heuristic over the raw item map is needed. An extraction with
+// neither a group identifier, single-record fields, nor per-phase content is
+// empty — e.g. {} or the {text, extracted} wrapper whose nested fields are
+// invisible to ParseExtractionFromAgent's top-level lookup.
+func (r *ExtractionResult) HasContent() bool {
+	if r == nil {
+		return false
+	}
+	if r.GroupTitle != "" || r.GroupSummary != "" {
+		return true
+	}
+	if s := r.Single; s != nil {
+		if s.Title != "" || s.Rationale != "" || s.Problem != "" ||
+			len(s.Alternatives) > 0 || len(s.TradeOffs) > 0 {
+			return true
+		}
+	}
+	for _, p := range r.Phases {
+		if p.PhaseTitle != "" || p.PhaseDecision != "" ||
+			p.PhaseRationale != "" || p.PhaseProblem != "" ||
+			len(p.Alternatives) > 0 || len(p.TradeOffs) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // ParseExtractionFromAgent builds Detection + ExtractionResult from the flat
 // CaptureRequest.Extracted dict sent by the agent. Wire → internal conversion.
 //
@@ -71,22 +102,9 @@ func ParseExtractionFromAgent(extracted map[string]any) (*Detection, *Extraction
 		return nil, nil, fmt.Errorf("extracted JSON is nil")
 	}
 
-	// Tier 2 detection
-	tier2, _ := extracted["tier2"].(map[string]any)
 	detection := &Detection{
 		IsSignificant: true, // agent-delegated: always true
 		Domain:        "general",
-	}
-
-	if tier2 != nil {
-		// capture=false: early rejection
-		if capture, ok := tier2["capture"].(bool); ok && !capture {
-			reason, _ := tier2["reason"].(string)
-			return detection, nil, &CaptureRejection{Reason: reason}
-		}
-		if dom, ok := tier2["domain"].(string); ok && dom != "" {
-			detection.Domain = dom
-		}
 	}
 
 	// Confidence: top-level or 0.0
@@ -178,17 +196,6 @@ func ParseExtractionFromAgent(extracted map[string]any) (*Detection, *Extraction
 		Confidence:   conf,
 		Single:       &single,
 	}, nil
-}
-
-type CaptureRejection struct {
-	Reason string
-}
-
-func (e *CaptureRejection) Error() string {
-	if e.Reason != "" {
-		return "capture rejected: " + e.Reason
-	}
-	return "capture rejected by agent"
 }
 
 //--- Helper ---//
