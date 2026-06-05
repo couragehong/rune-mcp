@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/CryptoLabInc/rune-mcp/internal/adapters/embedder"
@@ -87,6 +88,23 @@ func (s *CaptureService) Handle(ctx context.Context, req *domain.CaptureRequest)
 	}
 	if extraction == nil {
 		return nil, &domain.RuneError{Code: domain.CodeInvalidInput, Message: "extraction is nil after parse"}
+	}
+
+	// D14 (lifecycle.md §3): an item with neither raw text nor any embeddable
+	// extraction content must be rejected, never captured. Single capture always
+	// carries a validated req.Text, so this only fires for agent-supplied
+	// extractions with no usable fields — an empty batch item, or the
+	// {text, extracted} wrapper anti-pattern whose fields nest under "extracted"
+	// where ParseExtractionFromAgent's top-level lookup can't see them. Enforcing
+	// D14 here (the shared path) keeps single capture and batch in agreement and
+	// makes the contentless-record corpus poisoning (identical boilerplate →
+	// ~1.0 self-similarity → cascading false near_duplicate) structurally
+	// impossible: a contentless item never reaches the embedder.
+	if strings.TrimSpace(req.Text) == "" && !extraction.HasContent() {
+		return nil, &domain.RuneError{
+			Code:    domain.CodeInvalidInput,
+			Message: "item has no usable extraction content: provide a top-level decision field (\"reusable_insight\", \"title\", \"group_title\", \"rationale\", \"problem\", or per-phase fields). Each batch item is a flat extracted object, not a {text, extracted} wrapper.",
+		}
 	}
 
 	// Phase 5: build policy
@@ -210,17 +228,16 @@ func (s *CaptureService) Batch(ctx context.Context, args BatchCaptureArgs) (*Bat
 	}
 
 	for i, item := range rawItems {
-		text := ""
-		if ri, ok := item["reusable_insight"].(string); ok && ri != "" {
-			text = ri
-		} else if t, ok := item["title"].(string); ok && t != "" {
-			text = t
-		} else {
-			text = "[batch_capture]"
-		}
-
+		// A batch item carries no per-item raw text — the embeddable content lives
+		// entirely in the flat extracted object. Hand it straight to Handle, whose
+		// shared D14 guard rejects a contentless item (empty Text + no extraction
+		// content) as an error. This keeps batch and single capture on one code
+		// path, so the gate cannot drift from what ParseExtractionFromAgent/
+		// RenderPayloadText actually embed (e.g. {group_title, phases} or a
+		// phase-only item with no top-level title is accepted, exactly as in
+		// single capture; the {text, extracted} wrapper is rejected).
 		req := &domain.CaptureRequest{
-			Text:      text,
+			Text:      "",
 			Source:    args.Source,
 			Extracted: item,
 		}

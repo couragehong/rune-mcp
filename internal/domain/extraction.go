@@ -61,6 +61,37 @@ func (r *ExtractionResult) IsBundle() bool {
 	return r.GroupType == "bundle" && len(r.Phases) > 1
 }
 
+// HasContent reports whether the extraction carries any substance that
+// BuildPhases/RenderPayloadText would actually render into a record. It is the
+// single source of truth for D14 (no contentless records): the capture pipeline
+// enforces it in Handle, so single capture and batch agree and no separate,
+// drift-prone heuristic over the raw item map is needed. An extraction with
+// neither a group identifier, single-record fields, nor per-phase content is
+// empty — e.g. {} or the {text, extracted} wrapper whose nested fields are
+// invisible to ParseExtractionFromAgent's top-level lookup.
+func (r *ExtractionResult) HasContent() bool {
+	if r == nil {
+		return false
+	}
+	if r.GroupTitle != "" || r.GroupSummary != "" {
+		return true
+	}
+	if s := r.Single; s != nil {
+		if s.Title != "" || s.Rationale != "" || s.Problem != "" ||
+			len(s.Alternatives) > 0 || len(s.TradeOffs) > 0 {
+			return true
+		}
+	}
+	for _, p := range r.Phases {
+		if p.PhaseTitle != "" || p.PhaseDecision != "" ||
+			p.PhaseRationale != "" || p.PhaseProblem != "" ||
+			len(p.Alternatives) > 0 || len(p.TradeOffs) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // ParseExtractionFromAgent builds Detection + ExtractionResult from the flat
 // CaptureRequest.Extracted dict sent by the agent. Wire → internal conversion.
 //
