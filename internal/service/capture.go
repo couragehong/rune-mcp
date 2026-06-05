@@ -89,7 +89,7 @@ func (s *CaptureService) Handle(ctx context.Context, req *domain.CaptureRequest)
 	if strings.TrimSpace(req.Text) == "" && !extraction.HasContent() {
 		return nil, &domain.RuneError{
 			Code:    domain.CodeInvalidInput,
-			Message: "item has no usable extraction content: provide a top-level decision field (\"reusable_insight\", \"title\", \"group_title\", \"rationale\", \"problem\", or per-phase fields). Each batch item is a flat extracted object, not a {text, extracted} wrapper.",
+			Message: "item has no usable extraction content: provide a top-level decision field (\"reusable_insight\", \"title\", \"rationale\", or \"problem\"), or the {group_title, phases} multi-phase shape. A bare \"group_title\" without \"phases\" is not enough — it is only read in the multi-phase shape. Each batch item is a flat extracted object, not a {text, extracted} wrapper.",
 		}
 	}
 

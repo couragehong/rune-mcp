@@ -186,8 +186,11 @@ func buildMultiRecord(
 	groupTitle := extraction.GroupTitle
 	if groupTitle == "" {
 		src := firstNonEmpty(cleanText, extraction.GroupSummary)
-		if src == "" && len(phases) > 0 {
-			src = firstNonEmpty(phases[0].PhaseTitle, phases[0].PhaseDecision)
+		// Scan every phase, not just phases[0]: HasContent admits an item whose
+		// content lives in a later phase, so phases[0] may be empty while a
+		// subsequent phase carries the only titleable text.
+		for i := 0; src == "" && i < len(phases); i++ {
+			src = firstNonEmpty(phases[i].PhaseTitle, phases[i].PhaseDecision)
 		}
 		groupTitle = extractTitle(src)
 	}

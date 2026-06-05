@@ -48,6 +48,22 @@ func TestBuildPhases_TitleFromExtractionWhenNoRawText(t *testing.T) {
 			t.Fatalf("explicit title not preserved: %q", rec.Title)
 		}
 	})
+
+	// HasContent admits a multi-phase item whose content lives in a later phase;
+	// the group-title fallback must scan past an empty phases[0] instead of
+	// degrading to "General decision".
+	t.Run("multi-phase content only in a later phase", func(t *testing.T) {
+		raw := map[string]any{
+			"phases": []any{
+				map[string]any{},
+				map[string]any{"phase_title": "Technology Selection", "phase_decision": "Adopt PostgreSQL"},
+			},
+		}
+		rec := buildOne(t, raw, now)
+		if rec.Title == "General decision" || rec.Title == "" {
+			t.Fatalf("group title degraded to %q; want it derived from a later phase", rec.Title)
+		}
+	})
 }
 
 func buildOne(t *testing.T, raw map[string]any, now time.Time) domain.DecisionRecord {
